@@ -97,20 +97,32 @@ def main() -> int:
                 break
             time.sleep(5 * attempt)
 
+        # Leggo la risposta PRIMA di chiudere il browser
+        status, ok = resp.status, resp.ok
+        text = resp.text()[:500]
         ctx.storage_state(path=cfg["session_file"])  # salva la sessione rinfrescata
         browser.close()
 
-    text = resp.text()[:500]
-    if resp.ok:
+    print(f"HTTP {status} – {text}")
+    # Alcune API rispondono 200 ma con un flag di esito negativo nel JSON
+    try:
+        data = json.loads(text) if text.strip().startswith("{") else {}
+        flags = [v for k, v in data.items() if k.lower() in ("success", "issuccess", "succeeded")]
+        if ok and flags and not all(flags):
+            ok = False
+    except ValueError:
+        pass
+
+    if ok:
         notify(f"✅ WeWork: posto prenotato per {date_str}.")
         return 0
-    if resp.status == 409:
+    if status == 409:
         notify(f"ℹ️ WeWork {date_str}: conflitto (409), forse già prenotato. Risposta: {text}")
         return 0
-    if resp.status in (401, 403):
-        notify(f"⚠️ WeWork {date_str}: non autorizzato ({resp.status}). Sessione da rinnovare.")
+    if status in (401, 403):
+        notify(f"⚠️ WeWork {date_str}: non autorizzato ({status}). Sessione da rinnovare.")
         return 2
-    notify(f"❌ WeWork {date_str}: prenotazione fallita ({resp.status}). Risposta: {text}")
+    notify(f"❌ WeWork {date_str}: prenotazione fallita ({status}). Risposta: {text}")
     return 1
 
 
