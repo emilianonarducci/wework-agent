@@ -14,7 +14,7 @@ booking_date = input("Data che prenoterai a mano (YYYY-MM-DD): ").strip()
 captured = []
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(headless=False)
+    browser = p.chromium.launch(headless=False, channel=cfg.get("browser_channel") or None)
     ctx = browser.new_context(storage_state=cfg["session_file"])
     page = ctx.new_page()
 

@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright
 cfg = yaml.safe_load(open("config.yaml"))
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(headless=False)
+    browser = p.chromium.launch(headless=False, channel=cfg.get("browser_channel") or None)
     ctx = browser.new_context()
     page = ctx.new_page()
     page.goto(cfg["start_url"])

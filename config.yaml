@@ -12,6 +12,9 @@ session_file: storage_state.json      # sessione autenticata (NON committare)
 template_file: booking_template.json  # chiamata di prenotazione registrata (NON committare)
 
 headless: true
+# Browser da usare: vuoto = Chromium di Playwright; "msedge" = Microsoft Edge già installato
+# (utile sui PC aziendali dove il download di Chromium è bloccato)
+browser_channel: ""
 max_retries: 3
 
 # Notifica push sul telefono con l'app ntfy: scegli un topic lungo e difficile da indovinare.

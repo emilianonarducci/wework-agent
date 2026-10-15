@@ -62,7 +62,7 @@ def main() -> int:
     tpl = json.load(open(cfg["template_file"]))
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=cfg.get("headless", True))
+        browser = p.chromium.launch(headless=cfg.get("headless", True), channel=cfg.get("browser_channel") or None)
         ctx = browser.new_context(storage_state=cfg["session_file"])
         page = ctx.new_page()
 
