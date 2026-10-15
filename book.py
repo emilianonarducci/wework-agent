@@ -47,6 +47,13 @@ def target_date() -> dt.date | None:
 
 
 def main() -> int:
+    # Su GitHub il cron è in UTC: il workflow parte sia alle 22:05 che alle 23:05 UTC
+    # e qui si procede solo nel run che cade dopo la mezzanotte italiana (ora legale o solare).
+    if os.environ.get("ONLY_AFTER_MIDNIGHT") == "1":
+        hour = dt.datetime.now(ZoneInfo(cfg["timezone"])).hour
+        if hour != 0:
+            print(f"Ora italiana {hour}:xx, non è il run di mezzanotte: esco.")
+            return 0
     d = target_date()
     if d is None:
         print("Data target esclusa (weekend o skip_dates): niente da fare.")

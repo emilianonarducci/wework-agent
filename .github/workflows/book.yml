@@ -2,9 +2,11 @@ name: Prenota WeWork
 
 on:
   schedule:
-    # Il cron di GitHub è in UTC: 06:07 UTC = 08:07 ora legale / 07:07 ora solare.
-    # Lo script calcola da solo la data (oggi + 5) e salta i weekend.
-    - cron: "7 6 * * *"
+    # Il cron di GitHub è in UTC. Mezzanotte italiana = 22:00 UTC (ora legale) o 23:00 UTC (ora solare):
+    # parte a entrambi gli orari e book.py procede solo nel run che cade tra 00:00 e 00:59 in Italia.
+    # Lo script calcola da solo la data (oggi + days_ahead) e salta i weekend.
+    - cron: "2 22 * * *"
+    - cron: "2 23 * * *"
   workflow_dispatch: {}   # per lanciarlo a mano dalla tab Actions
 
 permissions:
@@ -53,6 +55,7 @@ jobs:
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           TEAMS_WEBHOOK: ${{ secrets.TEAMS_WEBHOOK }}
+          ONLY_AFTER_MIDNIGHT: ${{ github.event_name == 'schedule' && '1' || '0' }}
         run: |
           set +e
           python book.py

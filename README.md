@@ -1,7 +1,7 @@
-# Agente prenotazione WeWork (oggi + 5 giorni) – GitHub Actions
+# Agente prenotazione WeWork (oggi + 6 giorni, a mezzanotte) – GitHub Actions
 
 Ogni mattina GitHub Actions lancia `book.py`, che riproduce la chiamata API di prenotazione
-registrata una volta, con la data di oggi + 5 giorni (weekend esclusi). L'esito arriva come
+registrata una volta, con la data di oggi + 6 giorni (weekend esclusi). L'esito arriva come
 notifica push sul telefono tramite l'app **ntfy**. Tutto gratuito e senza PC acceso.
 
 ## 1. Sul tuo PC (una volta)
