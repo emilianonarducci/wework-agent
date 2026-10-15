@@ -37,8 +37,8 @@ python book.py              # test locale (facoltativo)
 ## 4. Test e schedulazione
 
 - Tab **Actions → Prenota WeWork → Run workflow** per provarlo subito.
-- Poi parte da solo ogni giorno alle 06:07 UTC (08:07 ora legale, 07:07 ora solare).
-  Per cambiare orario modifica il `cron` in `.github/workflows/book.yml`.
+- Poi parte da solo ogni notte alle 00:02 ora italiana (gestisce in automatico ora legale e solare).
+  Per cambiare i giorni di anticipo modifica `days_ahead` in `config.yaml`.
 
 ## Notifiche che ricevi
 
