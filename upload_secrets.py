@@ -20,6 +20,19 @@ for name, path in (("STORAGE_STATE_GZ_B64", "storage_state.json"),
     subprocess.run(["gh", "secret", "set", name, "-R", repo], input=value.encode(), check=True)
     print(f"✓ {name} impostato ({len(value)} byte)")
 
-print("\nOra imposta anche:")
-print(f"  gh secret set NTFY_TOPIC -R {repo}   # il topic ntfy scelto")
-print(f"  gh secret set GH_PAT -R {repo}       # token GitHub con permesso Secrets: read and write")
+# Chiave per cifrare la sessione rinnovata salvata nel repo: generata qui, mai mostrata
+existing = subprocess.run(["gh", "secret", "list", "-R", repo], capture_output=True, text=True).stdout
+if "SESSION_KEY" not in existing:
+    import secrets as _s
+    subprocess.run(["gh", "secret", "set", "SESSION_KEY", "-R", repo],
+                   input=_s.token_urlsafe(32).encode(), check=True)
+    print("✓ SESSION_KEY generata e impostata")
+
+# Dice al workflow di usare la sessione appena caricata invece di quella salvata nel repo
+subprocess.run(["git", "pull", "-q"], check=False)
+open(".session_source", "w").write("secret\n")
+subprocess.run(["git", "add", ".session_source"], check=True)
+if subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode != 0:
+    subprocess.run(["git", "commit", "-qm", "Nuova sessione caricata"], check=True)
+    subprocess.run(["git", "push", "-q"], check=True)
+print("✓ Workflow impostato per usare la nuova sessione")

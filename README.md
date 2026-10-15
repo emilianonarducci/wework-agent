@@ -25,12 +25,8 @@ python book.py              # test locale (facoltativo)
    ```bash
    python upload_secrets.py tuo-utente/wework-agent
    ```
-4. Crea un **fine-grained token** (GitHub → Settings → Developer settings → Personal access tokens)
-   limitato a quel repo, con permesso **Secrets: Read and write**, e salvalo:
-   ```bash
-   gh secret set GH_PAT -R tuo-utente/wework-agent
-   ```
-   Serve al workflow per riscrivere la sessione rinfrescata dopo ogni run, così non scade.
+   Lo script genera anche `SESSION_KEY`: a ogni run il workflow salva nel repo la sessione
+   rinnovata, cifrata con quella chiave (`storage_state.enc`), così non scade. Nessun token personale serve.
 
 ## 3. Notifiche sul telefono (ntfy)
 

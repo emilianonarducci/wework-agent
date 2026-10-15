@@ -7,6 +7,9 @@ on:
     - cron: "7 6 * * *"
   workflow_dispatch: {}   # per lanciarlo a mano dalla tab Actions
 
+permissions:
+  contents: write   # serve per salvare nel repo la sessione rinnovata (cifrata)
+
 concurrency:
   group: wework-booking
   cancel-in-progress: false
@@ -28,16 +31,22 @@ jobs:
           pip install -r requirements.txt
           python -m playwright install --with-deps chromium
 
-      - name: Ripristina sessione e template dai secret
+      - name: Ripristina sessione e template
         env:
           S: ${{ secrets.STORAGE_STATE_GZ_B64 }}
           T: ${{ secrets.BOOKING_TEMPLATE_GZ_B64 }}
+          SESSION_KEY: ${{ secrets.SESSION_KEY }}
         run: |
           python - <<'EOF'
           import base64, gzip, os
-          for env, path in (("S", "storage_state.json"), ("T", "booking_template.json")):
-              open(path, "wb").write(gzip.decompress(base64.b64decode(os.environ[env])))
+          open("booking_template.json", "wb").write(gzip.decompress(base64.b64decode(os.environ["T"])))
+          open("storage_state.json", "wb").write(gzip.decompress(base64.b64decode(os.environ["S"])))
           EOF
+          # Se c'è una sessione rinnovata più recente nel repo, usa quella
+          if [ -f storage_state.enc ] && [ "$(cat .session_source 2>/dev/null)" = "repo" ]; then
+            echo "Uso la sessione rinnovata salvata nel repo"
+            openssl enc -d -aes-256-cbc -pbkdf2 -pass env:SESSION_KEY -in storage_state.enc -out storage_state.json
+          fi
 
       - name: Prenota
         id: book
@@ -50,13 +59,18 @@ jobs:
           echo "code=$?" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Salva la sessione rinfrescata nel secret
+      - name: Salva la sessione rinnovata (cifrata) nel repo
         if: steps.book.outputs.code != '2'
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          SESSION_KEY: ${{ secrets.SESSION_KEY }}
         run: |
-          python -c "import base64,gzip;print(base64.b64encode(gzip.compress(open('storage_state.json','rb').read())).decode(),end='')" \
-            | gh secret set STORAGE_STATE_GZ_B64 -R "${{ github.repository }}"
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:SESSION_KEY -in storage_state.json -out storage_state.enc
+          echo repo > .session_source
+          git config user.name "wework-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add storage_state.enc .session_source
+          git commit -m "Aggiorna sessione $(date -u +%F)" || exit 0
+          git push
 
       - name: Esito
         if: steps.book.outputs.code != '0'
