@@ -30,7 +30,15 @@ with sync_playwright() as p:
     ctx.storage_state(path=cfg["session_file"])
     browser.close()
 
-candidates = [c for c in captured if booking_date in c["url"] or booking_date in c["body"]]
+y, m, d = booking_date.split("-")
+us_date = f"{m}/{d}/{y}"  # formato usato da WeWork Workplace (MM/DD/YYYY)
+
+
+def templatize(s: str) -> str:
+    return s.replace(booking_date, "{{DATE}}").replace(us_date, "{{DATE_US}}")
+
+
+candidates = [c for c in captured if any(x in c["url"] or x in c["body"] for x in (booking_date, us_date))]
 if not candidates:
     print("Nessuna richiesta contiene la data in formato YYYY-MM-DD. Tutte le richieste catturate:")
     candidates = captured
@@ -44,9 +52,9 @@ c = candidates[idx]
 
 template = {
     "method": c["method"],
-    "url": c["url"].replace(booking_date, "{{DATE}}"),
+    "url": templatize(c["url"]),
     "headers": {k: v for k, v in c["headers"].items() if k.lower() not in VOLATILE},
-    "body": c["body"].replace(booking_date, "{{DATE}}"),
+    "body": templatize(c["body"]),
 }
 json.dump(template, open(cfg["template_file"], "w"), indent=2, ensure_ascii=False)
 print(f"\nTemplate salvato in {cfg['template_file']}.")

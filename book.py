@@ -77,8 +77,17 @@ def main() -> int:
             return 2
 
         headers = {**tpl["headers"], **fresh}
-        url = tpl["url"].replace("{{DATE}}", date_str)
-        body = tpl["body"].replace("{{DATE}}", date_str)
+        us_date = d.strftime("%m/%d/%Y")
+
+        def fill(s: str) -> str:
+            return s.replace("{{DATE}}", date_str).replace("{{DATE_US}}", us_date)
+
+        if "{{DATE" not in tpl["url"] + tpl["body"]:
+            notify("❌ WeWork: il template non contiene la data da sostituire. Lancia fix_template.py.")
+            browser.close()
+            return 1
+        url = fill(tpl["url"])
+        body = fill(tpl["body"])
 
         resp = None
         for attempt in range(1, cfg.get("max_retries", 3) + 1):
