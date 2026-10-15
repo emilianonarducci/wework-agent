@@ -1,5 +1,5 @@
 # Configurazione agente prenotazione WeWork
-days_ahead: 6              # giorni di anticipo
+days_ahead: 7              # giorni di anticipo
 skip_weekends: true        # non prenota se la data target cade sabato/domenica
 skip_dates: []             # es. ["2026-12-25", "2026-12-26"] ferie/festivi
 timezone: Europe/Rome
