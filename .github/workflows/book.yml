@@ -55,6 +55,7 @@ jobs:
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           TEAMS_WEBHOOK: ${{ secrets.TEAMS_WEBHOOK }}
+          BROWSER_CHANNEL: ""   # sul runner Linux usa sempre Chromium, anche se config.yaml dice msedge
           ONLY_AFTER_MIDNIGHT: ${{ github.event_name == 'schedule' && '1' || '0' }}
         run: |
           set +e
