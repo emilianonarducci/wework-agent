@@ -1,0 +1,58 @@
+# Agente prenotazione WeWork (oggi + 5 giorni) – GitHub Actions
+
+Ogni mattina GitHub Actions lancia `book.py`, che riproduce la chiamata API di prenotazione
+registrata una volta, con la data di oggi + 5 giorni (weekend esclusi). L'esito arriva come
+notifica push sul telefono tramite l'app **ntfy**. Tutto gratuito e senza PC acceso.
+
+## 1. Sul tuo PC (una volta)
+
+```bash
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python -m playwright install chromium
+
+python save_session.py      # login manuale (SSO/MFA ok) -> storage_state.json
+python record_booking.py    # prenoti a mano una volta -> booking_template.json
+python book.py              # test locale (facoltativo)
+```
+
+## 2. Repository GitHub
+
+1. Crea un repo **privato** (es. `wework-agent`) e fai push di questa cartella.
+   `storage_state.json` e `booking_template.json` sono nel `.gitignore`: **non vanno committati**.
+2. Installa la GitHub CLI e fai `gh auth login`.
+3. Carica sessione e template come secret:
+   ```bash
+   python upload_secrets.py tuo-utente/wework-agent
+   ```
+4. Crea un **fine-grained token** (GitHub → Settings → Developer settings → Personal access tokens)
+   limitato a quel repo, con permesso **Secrets: Read and write**, e salvalo:
+   ```bash
+   gh secret set GH_PAT -R tuo-utente/wework-agent
+   ```
+   Serve al workflow per riscrivere la sessione rinfrescata dopo ogni run, così non scade.
+
+## 3. Notifiche sul telefono (ntfy)
+
+1. Installa l'app **ntfy** (iOS/Android) e iscriviti a un topic con un nome lungo e casuale
+   (es. `wework-emi-8f3k29xq`): chiunque conosca il nome può leggere le notifiche.
+2. `gh secret set NTFY_TOPIC -R tuo-utente/wework-agent` con quel nome.
+
+## 4. Test e schedulazione
+
+- Tab **Actions → Prenota WeWork → Run workflow** per provarlo subito.
+- Poi parte da solo ogni giorno alle 06:07 UTC (08:07 ora legale, 07:07 ora solare).
+  Per cambiare orario modifica il `cron` in `.github/workflows/book.yml`.
+
+## Notifiche che ricevi
+
+✅ prenotato · ℹ️ già prenotato · ⚠️ sessione scaduta · ❌ errore.
+Con ⚠️: rilancia `save_session.py` sul PC e poi `python upload_secrets.py ...`.
+
+## Limiti da sapere
+
+- I cron di GitHub possono partire con qualche minuto (a volte di più) di ritardo.
+- WeWork potrebbe trattare diversamente una sessione usata da IP di data center:
+  se le prenotazioni falliscono con 401/403 anche subito dopo il login, è probabilmente questo.
+- Se WeWork cambia API, rilancia `record_booking.py` e `upload_secrets.py`.
+- Verifica termini d'uso WeWork e policy EY sull'automazione dell'account.

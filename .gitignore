@@ -1,0 +1,5 @@
+storage_state.json
+booking_template.json
+.venv/
+book.log
+__pycache__/

@@ -1,0 +1,22 @@
+# Configurazione agente prenotazione WeWork
+days_ahead: 5              # giorni di anticipo
+skip_weekends: true        # non prenota se la data target cade sabato/domenica
+skip_dates: []             # es. ["2026-12-25", "2026-12-26"] ferie/festivi
+timezone: Europe/Rome
+
+start_url: https://members.wework.com/
+api_host_contains:         # host da cui catturare token e chiamate API
+  - wework.com
+
+session_file: storage_state.json      # sessione autenticata (NON committare)
+template_file: booking_template.json  # chiamata di prenotazione registrata (NON committare)
+
+headless: true
+max_retries: 3
+
+# Notifica push sul telefono con l'app ntfy: scegli un topic lungo e difficile da indovinare.
+# Su GitHub mettilo nel secret NTFY_TOPIC invece che qui.
+ntfy_topic: ""
+
+# Notifica esito: webhook Teams (Workflows/Incoming Webhook). Può arrivare anche da env TEAMS_WEBHOOK
+teams_webhook: ""

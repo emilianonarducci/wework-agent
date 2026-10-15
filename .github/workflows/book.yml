@@ -1,0 +1,63 @@
+name: Prenota WeWork
+
+on:
+  schedule:
+    # Il cron di GitHub è in UTC: 06:07 UTC = 08:07 ora legale / 07:07 ora solare.
+    # Lo script calcola da solo la data (oggi + 5) e salta i weekend.
+    - cron: "7 6 * * *"
+  workflow_dispatch: {}   # per lanciarlo a mano dalla tab Actions
+
+concurrency:
+  group: wework-booking
+  cancel-in-progress: false
+
+jobs:
+  book:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installa dipendenze
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Ripristina sessione e template dai secret
+        env:
+          S: ${{ secrets.STORAGE_STATE_GZ_B64 }}
+          T: ${{ secrets.BOOKING_TEMPLATE_GZ_B64 }}
+        run: |
+          python - <<'EOF'
+          import base64, gzip, os
+          for env, path in (("S", "storage_state.json"), ("T", "booking_template.json")):
+              open(path, "wb").write(gzip.decompress(base64.b64decode(os.environ[env])))
+          EOF
+
+      - name: Prenota
+        id: book
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TEAMS_WEBHOOK: ${{ secrets.TEAMS_WEBHOOK }}
+        run: |
+          set +e
+          python book.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Salva la sessione rinfrescata nel secret
+        if: steps.book.outputs.code != '2'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          python -c "import base64,gzip;print(base64.b64encode(gzip.compress(open('storage_state.json','rb').read())).decode(),end='')" \
+            | gh secret set STORAGE_STATE_GZ_B64 -R "${{ github.repository }}"
+
+      - name: Esito
+        if: steps.book.outputs.code != '0'
+        run: exit ${{ steps.book.outputs.code }}
