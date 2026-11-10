@@ -46,15 +46,37 @@ def target_date() -> dt.date | None:
     return d
 
 
+LAST_BOOKED_FILE = ".last_booked"  # ultima data prenotata: evita il doppione tra i due run schedulati
+
+
+def read_last_booked() -> str:
+    try:
+        return open(LAST_BOOKED_FILE).read().strip()
+    except FileNotFoundError:
+        return ""
+
+
+def skip_reason(now: dt.datetime, target: str, last_booked: str) -> str | None:
+    """Per i run schedulati: motivo per cui NON prenotare, oppure None se si procede.
+    Il cron di GitHub parte alle 22:02 e 23:02 UTC ma può arrivare con ore di ritardo:
+    si salta solo il run che cade la sera prima (data target sbagliata) e quello che
+    trova la data già prenotata dall'altro run. Qualsiasi orario dopo mezzanotte va bene."""
+    if now.hour >= 12:
+        return f"Ora italiana {now:%H:%M}, è ancora la sera prima: esco."
+    if target and last_booked == target:
+        return f"{target} già prenotato da un run precedente: esco."
+    return None
+
+
 def main() -> int:
-    # Su GitHub il cron è in UTC: il workflow parte sia alle 22:05 che alle 23:05 UTC
-    # e qui si procede solo nel run che cade dopo la mezzanotte italiana (ora legale o solare).
-    if os.environ.get("ONLY_AFTER_MIDNIGHT") == "1":
-        hour = dt.datetime.now(ZoneInfo(cfg["timezone"])).hour
-        if hour != 0:
-            print(f"Ora italiana {hour}:xx, non è il run di mezzanotte: esco.")
-            return 0
     d = target_date()
+    scheduled = os.environ.get("ONLY_AFTER_MIDNIGHT") == "1"
+    if scheduled:
+        now = dt.datetime.now(ZoneInfo(cfg["timezone"]))
+        reason = skip_reason(now, d.isoformat() if d else "", read_last_booked())
+        if reason:
+            print(reason)
+            return 0
     if d is None:
         print("Data target esclusa (weekend o skip_dates): niente da fare.")
         return 0
@@ -120,6 +142,8 @@ def main() -> int:
     except ValueError:
         pass
 
+    if ok or status == 409:
+        open(LAST_BOOKED_FILE, "w").write(date_str + "\n")
     if ok:
         notify(f"✅ WeWork: posto prenotato per {date_str}.")
         return 0

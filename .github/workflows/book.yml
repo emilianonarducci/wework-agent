@@ -3,7 +3,8 @@ name: Prenota WeWork
 on:
   schedule:
     # Il cron di GitHub è in UTC. Mezzanotte italiana = 22:00 UTC (ora legale) o 23:00 UTC (ora solare):
-    # parte a entrambi gli orari e book.py procede solo nel run che cade tra 00:00 e 00:59 in Italia.
+    # parte a entrambi gli orari e book.py procede nel primo run che cade dopo la mezzanotte italiana
+    # (anche se GitHub lo avvia con ore di ritardo); l'altro run esce senza prenotare.
     # Lo script calcola da solo la data (oggi + days_ahead) e salta i weekend.
     - cron: "2 22 * * *"
     - cron: "2 23 * * *"
@@ -73,6 +74,7 @@ jobs:
           git config user.name "wework-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add storage_state.enc .session_source
+          [ -f .last_booked ] && git add .last_booked
           git commit -m "Aggiorna sessione $(date -u +%F)" || exit 0
           git push
 
