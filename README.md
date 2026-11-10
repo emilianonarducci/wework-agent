@@ -37,7 +37,9 @@ python book.py              # test locale (facoltativo)
 ## 4. Test e schedulazione
 
 - Tab **Actions → Prenota WeWork → Run workflow** per provarlo subito.
-- Poi parte da solo ogni notte alle 00:02 ora italiana (gestisce in automatico ora legale e solare).
+- Poi prenota da solo ogni notte allo scoccare della mezzanotte italiana (gestisce in automatico ora
+  legale e solare): il workflow parte più volte dal pomeriggio, il primo run a meno di 3 ore dalla
+  mezzanotte la aspetta e prenota, gli altri escono.
   Per cambiare i giorni di anticipo modifica `days_ahead` in `config.yaml`.
 
 ## Notifiche che ricevi
@@ -47,7 +49,8 @@ Con ⚠️: rilancia `save_session.py` sul PC e poi `python upload_secrets.py ..
 
 ## Limiti da sapere
 
-- I cron di GitHub possono partire con qualche minuto (a volte di più) di ritardo.
+- I cron di GitHub possono partire con ore di ritardo: per questo il workflow parte in anticipo e
+  aspetta la mezzanotte. Se tutti i run arrivano dopo mezzanotte, prenota il primo che arriva.
 - WeWork potrebbe trattare diversamente una sessione usata da IP di data center:
   se le prenotazioni falliscono con 401/403 anche subito dopo il login, è probabilmente questo.
 - Se WeWork cambia API, rilancia `record_booking.py` e `upload_secrets.py`.

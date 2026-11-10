@@ -36,8 +36,9 @@ def notify(text: str) -> None:
             print(f"Notifica Teams non inviata: {e}")
 
 
-def target_date() -> dt.date | None:
-    today = dt.datetime.now(ZoneInfo(cfg["timezone"])).date()
+def target_date(booking_day: dt.date | None = None) -> dt.date | None:
+    """Data da prenotare: giorno in cui si prenota (default oggi) + days_ahead."""
+    today = booking_day or dt.datetime.now(ZoneInfo(cfg["timezone"])).date()
     d = today + dt.timedelta(days=cfg["days_ahead"])
     if cfg.get("skip_weekends") and d.weekday() >= 5:
         return None
@@ -56,32 +57,65 @@ def read_last_booked() -> str:
         return ""
 
 
-def skip_reason(now: dt.datetime, target: str, last_booked: str) -> str | None:
-    """Per i run schedulati: motivo per cui NON prenotare, oppure None se si procede.
-    Il cron di GitHub parte alle 22:02 e 23:02 UTC ma può arrivare con ore di ritardo:
-    si salta solo il run che cade la sera prima (data target sbagliata) e quello che
-    trova la data già prenotata dall'altro run. Qualsiasi orario dopo mezzanotte va bene."""
-    if now.hour >= 12:
-        return f"Ora italiana {now:%H:%M}, è ancora la sera prima: esco."
-    if target and last_booked == target:
-        return f"{target} già prenotato da un run precedente: esco."
-    return None
+def plan(now: dt.datetime, max_wait_min: int) -> tuple[str, dt.date, float]:
+    """Per i run schedulati decide cosa fare in base all'ora italiana di avvio.
+    Il cron di GitHub può arrivare con ore di ritardo, quindi il workflow parte più volte
+    dal pomeriggio in poi e il primo run abbastanza vicino alla mezzanotte la aspetta.
+    Ritorna (azione, giorno in cui si prenota, secondi di attesa):
+      "wait" = sera: aspetta la mezzanotte e prenota appena scatta
+      "exit" = troppo presto: ci penserà un run successivo
+      "now"  = già passata la mezzanotte (run in ritardo): prenota subito"""
+    if now.hour < 12:
+        return "now", now.date(), 0.0
+    tomorrow = now.date() + dt.timedelta(days=1)
+    midnight = dt.datetime.combine(tomorrow, dt.time(0), tzinfo=now.tzinfo)
+    wait = midnight.timestamp() - now.timestamp()  # via timestamp: corretto anche al cambio d'ora
+    if wait > max_wait_min * 60:
+        return "exit", tomorrow, wait
+    return "wait", tomorrow, wait
+
+
+def sleep_until(ts: float) -> None:
+    """Dorme fino all'istante ts (epoch), a pezzi per non accumulare deriva."""
+    while (left := ts - time.time()) > 0:
+        time.sleep(min(left, 60))
+
+
+def is_success(http_ok: bool, text: str) -> bool:
+    """Alcune API rispondono 200 ma con un flag di esito negativo nel JSON."""
+    if not http_ok:
+        return False
+    try:
+        data = json.loads(text) if text.strip().startswith("{") else {}
+    except ValueError:
+        return True
+    flags = [v for k, v in data.items() if k.lower() in ("success", "issuccess", "succeeded")]
+    return not flags or all(flags)
 
 
 def main() -> int:
-    d = target_date()
     scheduled = os.environ.get("ONLY_AFTER_MIDNIGHT") == "1"
+    booking_day, midnight_ts = None, None
     if scheduled:
         now = dt.datetime.now(ZoneInfo(cfg["timezone"]))
-        reason = skip_reason(now, d.isoformat() if d else "", read_last_booked())
-        if reason:
-            print(reason)
+        action, booking_day, wait = plan(now, cfg.get("max_wait_minutes", 180))
+        if action == "exit":
+            print(f"Ora italiana {now:%H:%M}, mancano {wait / 3600:.1f} h a mezzanotte: troppo presto, esco.")
             return 0
+        if action == "wait":
+            midnight_ts = time.time() + wait
+    d = target_date(booking_day)
     if d is None:
         print("Data target esclusa (weekend o skip_dates): niente da fare.")
         return 0
     date_str = d.isoformat()
+    if scheduled and read_last_booked() == date_str:
+        print(f"{date_str} già prenotato da un run precedente: esco.")
+        return 0
     tpl = json.load(open(cfg["template_file"]))
+    if midnight_ts:
+        print(f"Aspetto la mezzanotte italiana per prenotare {date_str} (mancano {wait / 60:.0f} min).", flush=True)
+        sleep_until(midnight_ts - 120)  # browser e token si preparano 2 minuti prima
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=cfg.get("headless", True), channel=os.environ.get("BROWSER_CHANNEL", cfg.get("browser_channel")) or None)
@@ -118,29 +152,29 @@ def main() -> int:
         url = fill(tpl["url"])
         body = fill(tpl["body"])
 
-        resp = None
-        for attempt in range(1, cfg.get("max_retries", 3) + 1):
+        if midnight_ts:
+            sleep_until(midnight_ts + 1)  # un secondo dopo la mezzanotte
+            print(f"Mezzanotte: invio la prenotazione ({dt.datetime.now(ZoneInfo(cfg['timezone'])):%H:%M:%S}).", flush=True)
+
+        # Tentativi: sempre su 5xx/429; a mezzanotte anche su un rifiuto diverso da "pieno"
+        # (es. finestra di prenotazione non ancora aperta per pochi secondi di scarto).
+        tries = 5 if midnight_ts else cfg.get("max_retries", 3)
+        for attempt in range(1, tries + 1):
             resp = page.request.fetch(url, method=tpl["method"], headers=headers,
                                       data=body or None, timeout=30_000)
-            if resp.status < 500 and resp.status != 429:
+            # Leggo la risposta PRIMA di chiudere il browser
+            status, text = resp.status, resp.text()[:500]
+            ok = is_success(resp.ok, text)
+            print(f"Tentativo {attempt}: HTTP {status} – {text}", flush=True)
+            server_busy = status >= 500 or status == 429
+            too_early = bool(midnight_ts) and not ok and status not in (401, 403, 409) \
+                and "overbooked" not in text.lower()
+            if ok or not (server_busy or too_early):
                 break
-            time.sleep(5 * attempt)
+            time.sleep(3 if midnight_ts else 5 * attempt)
 
-        # Leggo la risposta PRIMA di chiudere il browser
-        status, ok = resp.status, resp.ok
-        text = resp.text()[:500]
         ctx.storage_state(path=cfg["session_file"])  # salva la sessione rinfrescata
         browser.close()
-
-    print(f"HTTP {status} – {text}")
-    # Alcune API rispondono 200 ma con un flag di esito negativo nel JSON
-    try:
-        data = json.loads(text) if text.strip().startswith("{") else {}
-        flags = [v for k, v in data.items() if k.lower() in ("success", "issuccess", "succeeded")]
-        if ok and flags and not all(flags):
-            ok = False
-    except ValueError:
-        pass
 
     if ok or status == 409:
         open(LAST_BOOKED_FILE, "w").write(date_str + "\n")

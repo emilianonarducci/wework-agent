@@ -2,12 +2,16 @@ name: Prenota WeWork
 
 on:
   schedule:
-    # Il cron di GitHub è in UTC. Mezzanotte italiana = 22:00 UTC (ora legale) o 23:00 UTC (ora solare):
-    # parte a entrambi gli orari e book.py procede nel primo run che cade dopo la mezzanotte italiana
-    # (anche se GitHub lo avvia con ore di ritardo); l'altro run esce senza prenotare.
-    # Lo script calcola da solo la data (oggi + days_ahead) e salta i weekend.
-    - cron: "2 22 * * *"
-    - cron: "2 23 * * *"
+    # Il cron di GitHub è in UTC e può partire con ore di ritardo. Mezzanotte italiana = 22:00 UTC
+    # (ora legale) o 23:00 UTC (ora solare): il workflow parte più volte dal pomeriggio e book.py
+    # decide da solo: se mancano più di max_wait_minutes a mezzanotte esce, altrimenti aspetta la
+    # mezzanotte e prenota appena scatta. I run successivi restano in coda (concurrency) e, trovata
+    # la data già prenotata (.last_booked), escono; se arrivano tutti dopo mezzanotte prenota il primo.
+    # Lo script calcola da solo la data (giorno di prenotazione + days_ahead) e salta i weekend.
+    - cron: "32 16 * * *"
+    - cron: "32 18 * * *"
+    - cron: "32 20 * * *"
+    - cron: "32 22 * * *"
   workflow_dispatch: {}   # per lanciarlo a mano dalla tab Actions
 
 permissions:
@@ -20,7 +24,7 @@ concurrency:
 jobs:
   book:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 210   # fino a 180 min di attesa della mezzanotte (max_wait_minutes) + margine
     steps:
       - uses: actions/checkout@v4
 

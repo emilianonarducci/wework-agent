@@ -16,6 +16,9 @@ headless: true
 # (utile sui PC aziendali dove il download di Chromium è bloccato)
 browser_channel: ""
 max_retries: 3
+# Run schedulati: quanti minuti prima della mezzanotte italiana un run può mettersi in attesa.
+# Se cambi questo valore adegua anche timeout-minutes nel workflow.
+max_wait_minutes: 180
 
 # Notifica push sul telefono con l'app ntfy: scegli un topic lungo e difficile da indovinare.
 # Su GitHub mettilo nel secret NTFY_TOPIC invece che qui.
