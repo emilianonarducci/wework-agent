@@ -44,8 +44,10 @@ python book.py              # test locale (facoltativo)
 
 ## Notifiche che ricevi
 
-✅ prenotato · ℹ️ già prenotato · ⚠️ sessione scaduta · ❌ errore.
-Con ⚠️: rilancia `save_session.py` sul PC e poi `python upload_secrets.py ...`.
+✅ prenotato · ℹ️ già prenotato · ⏰ sessione in scadenza · ⚠️ sessione scaduta · ❌ errore.
+Il login WeWork dura circa 30 giorni e non si può rinnovare in automatico: negli ultimi 5 giorni
+arriva un ⏰ al giorno. Con ⏰ o ⚠️: rilancia `save_session.py` sul PC e poi `python upload_secrets.py ...`.
+I run del pomeriggio controllano la sessione, così un ⚠️ arriva ore prima di mezzanotte.
 
 ## Limiti da sapere
 

@@ -51,10 +51,7 @@ LAST_BOOKED_FILE = ".last_booked"  # ultima data prenotata: evita il doppione tr
 
 
 def read_last_booked() -> str:
-    try:
-        return open(LAST_BOOKED_FILE).read().strip()
-    except FileNotFoundError:
-        return ""
+    return read_marker(LAST_BOOKED_FILE)
 
 
 def plan(now: dt.datetime, max_wait_min: int) -> tuple[str, dt.date, float]:
@@ -93,15 +90,73 @@ def is_success(http_ok: bool, text: str) -> bool:
     return not flags or all(flags)
 
 
+SESSION_CREATED_FILE = ".session_created"  # data dell'ultimo login (la scrive upload_secrets.py)
+LAST_WARNED_FILE = ".last_warned"          # giorno dell'ultimo avviso di scadenza: uno al giorno
+RENEW_HINT = ("Sul PC: python save_session.py && python upload_secrets.py "
+              + os.environ.get("GITHUB_REPOSITORY", "<utente>/wework-agent"))
+
+
+def read_marker(path: str) -> str:
+    try:
+        return open(path).read().strip()
+    except FileNotFoundError:
+        return ""
+
+
+def session_warning(today: dt.date, created: str, max_days: int, warn_days: int) -> str | None:
+    """Il login WeWork dura circa max_days giorni e non si può rinnovare in automatico:
+    negli ultimi warn_days giorni ritorna il testo dell'avviso, altrimenti None."""
+    try:
+        left = max_days - (today - dt.date.fromisoformat(created)).days
+    except ValueError:
+        return None  # data del login sconosciuta
+    if left > warn_days:
+        return None
+    when = f"scade tra circa {left} giorni" if left > 1 else "scade a ore o è già scaduta"
+    return f"⏰ WeWork: la sessione (login del {created}) {when}. Rinnovala adesso. {RENEW_HINT}"
+
+
+def warn_if_session_expiring(today: dt.date) -> None:
+    text = session_warning(today, read_marker(SESSION_CREATED_FILE),
+                           cfg.get("session_max_days", 30), cfg.get("session_warn_days", 5))
+    if text and read_marker(LAST_WARNED_FILE) != today.isoformat():
+        notify(text)
+        open(LAST_WARNED_FILE, "w").write(today.isoformat() + "\n")
+
+
+def is_login_page(url: str) -> bool:
+    return "login" in url.lower() or "signin" in url.lower()
+
+
+def check_session() -> int:
+    """Apre la web app senza prenotare: verifica che la sessione sia valida e la rinfresca.
+    Lo fanno i run del pomeriggio, così una sessione scaduta si scopre ore prima di mezzanotte."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=cfg.get("headless", True), channel=os.environ.get("BROWSER_CHANNEL", cfg.get("browser_channel")) or None)
+        ctx = browser.new_context(storage_state=cfg["session_file"])
+        page = ctx.new_page()
+        page.goto(cfg["start_url"], wait_until="networkidle", timeout=60_000)
+        expired = is_login_page(page.url)
+        if not expired:
+            ctx.storage_state(path=cfg["session_file"])
+        browser.close()
+    if expired:
+        notify(f"⚠️ WeWork: sessione scaduta, stanotte non potrò prenotare. Rinnovala prima di mezzanotte. {RENEW_HINT}")
+        return 2
+    print("Sessione valida.")
+    return 0
+
+
 def main() -> int:
     scheduled = os.environ.get("ONLY_AFTER_MIDNIGHT") == "1"
     booking_day, midnight_ts = None, None
     if scheduled:
         now = dt.datetime.now(ZoneInfo(cfg["timezone"]))
+        warn_if_session_expiring(now.date())
         action, booking_day, wait = plan(now, cfg.get("max_wait_minutes", 180))
         if action == "exit":
-            print(f"Ora italiana {now:%H:%M}, mancano {wait / 3600:.1f} h a mezzanotte: troppo presto, esco.")
-            return 0
+            print(f"Ora italiana {now:%H:%M}, mancano {wait / 3600:.1f} h a mezzanotte: troppo presto per prenotare, controllo solo la sessione.")
+            return check_session()
         if action == "wait":
             midnight_ts = time.time() + wait
     d = target_date(booking_day)
@@ -134,8 +189,8 @@ def main() -> int:
         page.on("request", on_request)
         page.goto(cfg["start_url"], wait_until="networkidle", timeout=60_000)
 
-        if "login" in page.url.lower() or "signin" in page.url.lower():
-            notify("⚠️ WeWork: sessione scaduta. Rilancia save_session.py e aggiorna la sessione.")
+        if is_login_page(page.url):
+            notify(f"⚠️ WeWork: sessione scaduta, {date_str} non prenotato. {RENEW_HINT}")
             browser.close()
             return 2
 

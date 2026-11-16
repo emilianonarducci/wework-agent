@@ -20,6 +20,11 @@ max_retries: 3
 # Se cambi questo valore adegua anche timeout-minutes nel workflow.
 max_wait_minutes: 180
 
+# Il login WeWork dura circa 30 giorni e va rifatto a mano (save_session.py + upload_secrets.py).
+# Negli ultimi session_warn_days giorni arriva un avviso al giorno su ntfy.
+session_max_days: 30
+session_warn_days: 5
+
 # Notifica push sul telefono con l'app ntfy: scegli un topic lungo e difficile da indovinare.
 # Su GitHub mettilo nel secret NTFY_TOPIC invece che qui.
 ntfy_topic: ""

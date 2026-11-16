@@ -79,6 +79,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add storage_state.enc .session_source
           [ -f .last_booked ] && git add .last_booked
+          [ -f .last_warned ] && git add .last_warned
           git commit -m "Aggiorna sessione $(date -u +%F)" || exit 0
           git push
 

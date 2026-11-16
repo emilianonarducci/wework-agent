@@ -31,7 +31,13 @@ if "SESSION_KEY" not in existing:
 # Dice al workflow di usare la sessione appena caricata invece di quella salvata nel repo
 subprocess.run(["git", "pull", "-q"], check=False)
 open(".session_source", "w").write("secret\n")
-subprocess.run(["git", "add", ".session_source"], check=True)
+# Data del login (= ultimo salvataggio di storage_state.json): book.py la usa per avvisare
+# qualche giorno prima che la sessione scada (dura circa 30 giorni).
+import datetime
+import os
+created = datetime.date.fromtimestamp(os.path.getmtime("storage_state.json")).isoformat()
+open(".session_created", "w").write(created + "\n")
+subprocess.run(["git", "add", ".session_source", ".session_created"], check=True)
 if subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode != 0:
     subprocess.run(["git", "commit", "-qm", "Nuova sessione caricata"], check=True)
     subprocess.run(["git", "push", "-q"], check=True)
