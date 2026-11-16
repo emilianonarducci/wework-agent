@@ -3,3 +3,4 @@ booking_template.json
 .venv/
 book.log
 __pycache__/
+.login_profile/
